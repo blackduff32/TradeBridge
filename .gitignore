@@ -1,0 +1,26 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+data/
+coverage/
+*.db
+*.db-shm
+*.db-wal
+.DS_Store
+
+web-dist/
+playwright-report/
+test-results/
+contracts/**/build/
+contracts/**/.move/
+premium-audit.json
+
+.tools/
+.vercel
+.env*
+.vercel/
+
+# Keep the documented configuration template in source control.
+!.env.example
