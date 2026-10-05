@@ -1,0 +1,11 @@
+{
+  "profile": "product-admin",
+  "sourceRoots": ["web"],
+  "locale": "en-US",
+  "canonicalMap": "UX-CONTRACT.md",
+  "requiredCapabilities": ["Form", "Scrollbar", "Toast", "CRUD", "Date"],
+  "ownership": { "Date": "typed" },
+  "requiredCommands": ["check", "e2e"],
+  "commands": { "check": "npm run check", "e2e": "npm run test:e2e" },
+  "evidence": { "crudFullFlow": "e2e/workspace.spec.ts", "failurePaths": "e2e/workspace.spec.ts" }
+}
