@@ -1,0 +1,78 @@
+import { test, expect } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+
+test('sample review, proposal, immutable evidence, audit and sign-out', async ({ page }) => {
+  const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: /Bring both sides/ })).toBeVisible();
+  await page.screenshot({ path: 'test-results/welcome-desktop.png', fullPage: true, animations: 'disabled' });
+  expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
+  await page.getByRole('button', { name: 'Explore the 100-unit mismatch' }).click();
+  await expect(page.getByText('100-unit quantity difference')).toBeVisible();
+  await expect(page.getByRole('cell', { name: '1,100', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Create proposal v2' }).click();
+  await expect(page.getByText('Version 2 saved for review')).toBeVisible();
+  await expect(page.getByRole('cell', { name: '1,100', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Verify with World ID' }).first()).toBeDisabled();
+  // Every disabled next step says why.
+  await expect(page.getByText('Connect a World ID app and verified staff identity to enable.').first()).toBeVisible();
+  await expect(page.getByText('Steps 3 and 4 stay blocked until World ID approvals are configured. See Connections.')).toBeVisible();
+  await expect(page.getByText('Set OPENAI_API_KEY and TRADEBRIDGE_MODEL on the server to enable agent runs.')).toBeVisible();
+  await expect(page.getByText('Signed in as buyer agent')).toBeVisible();
+  await page.getByRole('button', { name: 'Audit trail', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Proposal v2 created' })).toBeVisible();
+  await page.getByRole('button', { name: 'Agreement', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Candidate agreement v2' })).toBeVisible();
+  await page.getByRole('button', { name: 'Trade review', exact: true }).click();
+  await page.screenshot({ path: 'test-results/trade-review-desktop.png', fullPage: true, animations: 'disabled' });
+  const violations = (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations;
+  expect(violations).toEqual([]);
+  expect(errors).toEqual([]);
+  await page.getByRole('button', { name: 'Leave demo and remove its working data' }).click();
+  await expect(page.getByRole('heading', { name: /Bring both sides/ })).toBeVisible();
+});
+test('validation and failed save preserve edits, and mobile has no page overflow', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: /Bring both sides/ })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: 'test-results/welcome-mobile.png', fullPage: true, animations: 'disabled' });
+  expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations).toEqual([]);
+  await page.getByRole('button', { name: 'Explore the 100-unit mismatch' }).click();
+  const quantity = page.getByLabel('Corrected quantity');
+  await quantity.fill('1.5'); await page.getByRole('button', { name: 'Create proposal v2' }).click();
+  await expect(page.getByText('Use a positive whole number.')).toBeVisible();
+  await quantity.fill('1000'); await page.getByLabel('Unit price', { exact: true }).fill('12.25');
+  await page.route('**/api/trades/TB-001/proposals', route => route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'STALE_REVISION', message: 'Reload the trade before proposing a new version.' }) }));
+  await page.getByRole('button', { name: 'Create proposal v2' }).click();
+  await expect(page.getByRole('alert')).toContainText('STALE_REVISION');
+  await expect(page.getByLabel('Unit price', { exact: true })).toHaveValue('12.25');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: 'test-results/trade-review-mobile.png', fullPage: true, animations: 'disabled' });
+  expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations).toEqual([]);
+});
+test('keyboard can enter sample workspace and connection status is honest', async ({ page }) => {
+  await page.goto('/');
+  await page.getByText('Use a development access token').click();
+  await page.getByLabel('Development token', { exact: true }).fill('invalid-synthetic-token');
+  await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
+  await expect(page.locator('#access').getByRole('alert')).toBeVisible();
+  const button = page.getByRole('button', { name: 'Explore the 100-unit mismatch' });
+  await button.focus(); await page.keyboard.press('Enter');
+  await expect(page.getByText('100-unit quantity difference')).toBeVisible();
+  await page.getByRole('button', { name: 'Connections', exact: true }).click();
+  await expect(page.getByText('App configuration required', { exact: true })).toBeVisible();
+  await expect(page.getByText('Not deployed', { exact: true })).toBeVisible();
+});
+test('unsaved proposal inputs survive navigation and refresh errors retain evidence', async ({ page }) => {
+  await page.goto('/'); await page.getByRole('button', { name: 'Explore the 100-unit mismatch' }).click();
+  await page.getByLabel('Unit price', { exact: true }).fill('11.50');
+  await page.getByRole('button', { name: 'Audit trail', exact: true }).click();
+  await page.getByRole('button', { name: 'Trade review', exact: true }).click();
+  await expect(page.getByLabel('Unit price', { exact: true })).toHaveValue('11.50');
+  await page.route('**/api/trades/TB-001', route => route.abort('failed'));
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('Could not reach TradeBridge');
+  await expect(page.getByRole('cell', { name: '1,100', exact: true })).toBeVisible();
+});
