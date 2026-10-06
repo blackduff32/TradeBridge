@@ -1,0 +1,11 @@
+.env*
+!.env.example
+.tools
+node_modules
+data
+contracts
+.git
+playwright-report
+test-results
+docs/screenshots
+docs/assets
